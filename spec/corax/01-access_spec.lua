@@ -1,9 +1,13 @@
-local redis = require "resty.redis"
 local helpers = require "spec.helpers"
 local version = require("version").version
 
 local PLUGIN_NAME = "corax"
 local KONG_VERSION = version(select(3, assert(helpers.kong_exec("version"))))
+
+local REDIS_HOST     = "127.0.0.1"
+local REDIS_PORT     = 6379
+local REDIS_PASSWORD = ""
+local REDIS_DATABASE = 0
 
 local DEFAULT_ROUTE_HOST           = "test1.com"
 local VARY_QUERY_PARAMS_ROUTE_HOST = "test2.com"
@@ -28,10 +32,36 @@ local function test_is_bypass(res)
 end
 
 
+local function flush_redis()
+  local redis = require "resty.redis"
+  local red = redis:new()
+  red:set_timeout(2000)
+  local ok, err = red:connect(REDIS_HOST, REDIS_PORT)
+  if not ok then
+    error("failed to connect to Redis: " .. err)
+  end
+
+  if REDIS_PASSWORD and REDIS_PASSWORD ~= "" then
+    local ok, err = red:auth(REDIS_PASSWORD)
+    if not ok then
+      error("failed to connect to Redis: " .. err)
+    end
+  end
+
+  local ok, err = red:select(REDIS_DATABASE)
+  if not ok then
+    error("failed to change Redis database: " .. err)
+  end
+
+  red:flushall()
+  red:close()
+end
+
+
 for _, strategy in helpers.each_strategy() do
   describe(PLUGIN_NAME .. ": (access) [#" .. strategy .. "]", function()
     local client = helpers.proxy_client
-    local red = redis:new()
+
     local route_configs = {
       default = {
         host = DEFAULT_ROUTE_HOST,
@@ -53,6 +83,8 @@ for _, strategy in helpers.each_strategy() do
 
     lazy_setup(function()
       local bp, routes
+
+      flush_redis()
 
       if KONG_VERSION >= version("0.15.0") then
         --
@@ -94,13 +126,8 @@ for _, strategy in helpers.each_strategy() do
       helpers.stop_kong(nil, true)
     end)
 
-    before_each(function()
-      local ok, err = red:connect('localhost', '6379')
-      assert(ok, err)
-    end)
-
     after_each(function()
-      red:flushall()
+      flush_redis()
     end)
 
     describe("request", function()
