@@ -11,7 +11,7 @@ local CACHE_LOW_TTL_ROUTE_HOST     = "test3.com"
 
 
 local function cache_is_status(res, status)
-  local header_value = assert.response(res).has.header("X-Cache-Status")
+  local header_value = assert.response(res).has.header("x-cache-status")
   assert.equal(status, header_value)
 end
 

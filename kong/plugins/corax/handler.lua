@@ -81,7 +81,7 @@ function plugin:access(conf)
   local method = kong.request.get_method()
 
   if not utils.table_contains(conf.request_method, method) then
-    kong.response.set_header("X-Cache-Status", "Bypass")
+    kong.response.set_header("x-cache-status", "Bypass")
     return
   end
 
@@ -92,15 +92,15 @@ function plugin:access(conf)
   if not hit or hit == ngx.null then
     ngx.ctx.should_cache_response = true
     ngx.ctx.cache_key = key
-    kong.response.set_header("X-Cache-Status", "Miss")
+    kong.response.set_header("x-cache-status", "Miss")
     return
   end
 
   hit = cjson.decode(hit)
 
-  return kong.response.exit(hit.status, hit.body, {
-    ["X-Cache-Status"] = "Hit",
-  })
+  headers = hit.headers or {}
+  headers["x-cache-status"] = "Hit"
+  return kong.response.exit(hit.status, hit.body, headers)
 end
 
 function plugin:header_filter(conf)
