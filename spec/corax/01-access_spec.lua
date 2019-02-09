@@ -14,6 +14,7 @@ local VARY_QUERY_PARAMS_ROUTE_HOST = "test2.com"
 local CACHE_LOW_TTL_ROUTE_HOST     = "test3.com"
 local VARY_HEADERS_ROUTE_HOST      = "test4.com"
 local STATUS_CODES_ROUTE_HOST      = "test5.com"
+local CUSTOM_HEADERS_ROUTE_HOST    = "test6.com"
 
 
 local function cache_is_status(res, status)
@@ -130,6 +131,20 @@ for _, strategy in helpers.each_strategy() do
           response_code = {"418"}
         }
       },
+      custom_headers = {
+        host = CUSTOM_HEADERS_ROUTE_HOST,
+        config = {
+
+        },
+        plugins = {
+          {
+            name = "response-transformer",
+            config = {
+              add = { headers = {"X-Super-Duper:CustomDuper"} },
+            }
+          },
+        }
+      },
     }
 
     lazy_setup(function()
@@ -159,6 +174,10 @@ for _, strategy in helpers.each_strategy() do
           route = { id = routes[name].id },
           config = route_config.config
         }
+        for _, plugin in pairs(route_config.plugins or {}) do
+          plugin["route"] = { id = routes[name].id }
+          bp.plugins:insert(plugin)
+        end
       end
 
       -- start kong
@@ -383,6 +402,24 @@ for _, strategy in helpers.each_strategy() do
           }, 418)
           test_is_hit(r)
         end)
+      end)
+
+      it("passes response headers along", function()
+        -- Formally content type test also tests this feature.
+        GET("/request", {
+          headers = {
+            host = DEFAULT_ROUTE_HOST,
+          },
+        }, 200)
+
+        local r = GET("/request", {
+          headers = {
+            host = DEFAULT_ROUTE_HOST,
+          },
+        }, 200)
+        test_is_hit(r)
+        local header_value = assert.response(r).has.header("x-powered-by")
+        assert.equal("mock_upstream", header_value)
       end)
     end)
   end)
