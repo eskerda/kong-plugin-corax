@@ -39,6 +39,11 @@ return {
       default = 6379,
       required = true,
     },
+    redis_password = {
+      type = "string",
+      required = true,
+      default = "",
+    },
     redis_database = {
       type = "number",
       default = 0,
