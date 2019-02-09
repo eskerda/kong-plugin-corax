@@ -1,8 +1,9 @@
+local tx = require "pl/tablex"
 local cjson = require "cjson"
 local redis = require "resty.redis"
-local tx = require "pl/tablex"
 local utils = require "kong.tools.utils"
 
+local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
 
 local function is_present(str)
   return str and str ~= "" and str ~= ngx.null
@@ -64,17 +65,19 @@ local redis = {
     red:set(key, value)
     red:expire(key, conf.cache_ttl)
   end,
+  connection = redis_connection,
 }
 
 local store = {}
 
 function store.key(conf, request)
-  local path    = request.get_path()
-  local host    = request.get_host()
-  local port    = request.get_port()
-  local query   = request.get_query()
-  local method  = request.get_method()
-  local headers = request.get_headers()
+  local prefix   = PLUGIN_NAME .. "-" .. conf.route_id
+  local path     = request.get_path()
+  local host     = request.get_host()
+  local port     = request.get_port()
+  local query    = request.get_query()
+  local method   = request.get_method()
+  local headers  = request.get_headers()
 
   if conf.vary_query_params then
     query = tx.intersection(query, tx.makeset(conf.vary_query_params or {}))
@@ -88,8 +91,7 @@ function store.key(conf, request)
     host, port, method, path, utils.encode_args(query), headers,
   }
 
-  key = table.concat(key_elements)
-  return ngx.md5(key)
+  return prefix .. "-" .. ngx.md5(table.concat(key_elements))
 end
 
 function store.set(conf, key, response)
