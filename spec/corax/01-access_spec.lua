@@ -13,6 +13,7 @@ local DEFAULT_ROUTE_HOST           = "test1.com"
 local VARY_QUERY_PARAMS_ROUTE_HOST = "test2.com"
 local CACHE_LOW_TTL_ROUTE_HOST     = "test3.com"
 local VARY_HEADERS_ROUTE_HOST      = "test4.com"
+local STATUS_CODES_ROUTE_HOST      = "test5.com"
 
 
 local function cache_is_status(res, status)
@@ -123,7 +124,12 @@ for _, strategy in helpers.each_strategy() do
           vary_headers = {"some", "headers"}
         }
       },
-
+      status_codes = {
+        host = STATUS_CODES_ROUTE_HOST,
+        config = {
+          response_code = {"418"}
+        }
+      },
     }
 
     lazy_setup(function()
@@ -348,5 +354,36 @@ for _, strategy in helpers.each_strategy() do
       end)
     end)
 
+    describe("response", function()
+      describe("status code #teapot", function()
+        it("does not cache non configured status codes", function()
+          local r = GET("/status/418", {
+            headers = {
+              host = DEFAULT_ROUTE_HOST,
+            },
+          }, 418)
+          test_is_bypass(r)
+          assert.are.equal(#redis.keys(red), 0)
+        end)
+
+        it("caches configured status codes", function()
+          local r = GET("/status/418", {
+            headers = {
+              host = STATUS_CODES_ROUTE_HOST,
+            },
+          }, 418)
+          test_is_miss(r)
+
+          -- Checks that the proxy is returning the same status code
+          assert.are.equal(#redis.keys(red), 1)
+          local r = GET("/status/418", {
+            headers = {
+              host = STATUS_CODES_ROUTE_HOST,
+            },
+          }, 418)
+          test_is_hit(r)
+        end)
+      end)
+    end)
   end)
 end
