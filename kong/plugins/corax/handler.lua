@@ -4,8 +4,11 @@ local store = require "kong.plugins.corax.store"
 local filters = require "kong.plugins.corax.filters"
 local kong = kong
 
+local PLUGIN_NAME    = require("kong.plugins.corax").PLUGIN_NAME
+local PLUGIN_VERSION = require("kong.plugins.corax").PLUGIN_VERSION
+
 function plugin:new()
-  plugin.super.new(self, "corax")
+  plugin.super.new(self, PLUGIN_NAME)
 end
 
 function plugin:access(conf)
@@ -83,7 +86,7 @@ function plugin:body_filter(conf)
   end
 end
 
-plugin.VERSION = '1.0.0'
+plugin.VERSION = PLUGIN_VERSION
 plugin.PRIORITY = 1101    -- handle this plugin after all auth plugins
 
 return plugin

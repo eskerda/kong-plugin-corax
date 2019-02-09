@@ -1,7 +1,7 @@
 local helpers = require "spec.helpers"
 local version = require("version").version
 
-local PLUGIN_NAME = "corax"
+local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
 local KONG_VERSION = version(select(3, assert(helpers.kong_exec("version"))))
 
 local REDIS_HOST     = "127.0.0.1"

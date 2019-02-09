@@ -20,6 +20,7 @@ dependencies = {
 build = {
   type = "builtin",
   modules = {
+    ["kong.plugins.corax"] = "kong/plugins/corax/init.lua",
     ["kong.plugins.corax.handler"] = "kong/plugins/corax/handler.lua",
     ["kong.plugins.corax.schema"] = "kong/plugins/corax/schema.lua",
     ["kong.plugins.corax.store"] = "kong/plugins/corax/store.lua",
