@@ -12,6 +12,7 @@ local REDIS_DATABASE = 0
 local DEFAULT_ROUTE_HOST           = "test1.com"
 local VARY_QUERY_PARAMS_ROUTE_HOST = "test2.com"
 local CACHE_LOW_TTL_ROUTE_HOST     = "test3.com"
+local VARY_HEADERS_ROUTE_HOST      = "test4.com"
 
 
 local function cache_is_status(res, status)
@@ -116,6 +117,13 @@ for _, strategy in helpers.each_strategy() do
           cache_ttl = 1,
         }
       },
+      vary_headers = {
+        host = VARY_HEADERS_ROUTE_HOST,
+        config = {
+          vary_headers = {"some", "headers"}
+        }
+      },
+
     }
 
     lazy_setup(function()
@@ -274,6 +282,70 @@ for _, strategy in helpers.each_strategy() do
         end)
       end)
 
+      describe("headers", function()
+        it("by default does not take headers into account", function()
+          local r = GET("/request", {
+            headers = {
+              host = DEFAULT_ROUTE_HOST,
+              some = "headers",
+              more = "headers",
+            },
+          }, 200)
+          local r2 = GET("/request", {
+            headers = {
+              host = DEFAULT_ROUTE_HOST,
+              other = "headers",
+              are = "here",
+            },
+          }, 200)
+          test_is_hit(r2)
+        end)
+
+        describe("configured vary headers affect key generation", function()
+          before_each(function()
+            GET("/request", {
+              headers = {
+                host = VARY_HEADERS_ROUTE_HOST,
+                some = "headers",
+                headers = "are fun",
+              },
+            }, 200)
+          end)
+
+          it("with the same headers", function()
+            local r = GET("/request", {
+              headers = {
+                host = VARY_HEADERS_ROUTE_HOST,
+                some = "headers",
+                headers = "are fun",
+                other = "do not affect much",
+              },
+            }, 200)
+            test_is_hit(r)
+          end)
+
+          it("with completely different headers", function()
+            local r = GET("/request", {
+              headers = {
+                host = VARY_HEADERS_ROUTE_HOST,
+                ["not-the-headers"] = "you are looking for",
+              },
+            }, 200)
+            test_is_miss(r)
+          end)
+
+          it("with the same headers and different value", function()
+            local r = GET("/request", {
+              headers = {
+                host = VARY_HEADERS_ROUTE_HOST,
+                some = "headers",
+                headers = "are different",
+              },
+            }, 200)
+            test_is_miss(r)
+          end)
+        end)
+      end)
     end)
 
   end)
