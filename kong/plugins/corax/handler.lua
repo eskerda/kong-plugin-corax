@@ -38,8 +38,7 @@ function generate_key(conf)
   local method = kong.request.get_method()
 
   if conf.vary_query_params then
-    local keys = tx.intersection(conf.vary_query_params, tx.keys(query))
-    query = tx.pairmap(function(_, v) return query[v], v end, keys)
+    query = tx.intersection(query, tx.makeset(conf.vary_query_params or {}))
   end
 
   key = host .. port .. method .. path .. utils.encode_args(query)
