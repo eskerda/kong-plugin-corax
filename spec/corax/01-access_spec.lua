@@ -31,8 +31,7 @@ local function test_is_bypass(res)
   cache_is_status(res, "Bypass")
 end
 
-
-local function flush_redis()
+local function redis_connection()
   local redis = require "resty.redis"
   local red = redis:new()
   red:set_timeout(2000)
@@ -52,15 +51,53 @@ local function flush_redis()
   if not ok then
     error("failed to change Redis database: " .. err)
   end
-
-  red:flushall()
-  red:close()
+  return red
 end
 
+local redis = {
+  connection = redis_connection,
+  flush = function()
+    local red = redis_connection()
+    red:flushall()
+    red:close()
+  end,
+  keys = function(red)
+    return red:keys(PLUGIN_NAME .. "-*")
+  end
+}
+
+local function request(method, url, opts, res_status)
+  local client = helpers.proxy_client()
+  opts["method"] = method
+  opts["path"] = url
+  local res, err  = client:send(opts)
+  if not res then
+    client:close()
+    return nil, err
+  end
+
+  local body, err = assert.res_status(res_status, res)
+  if not body then
+    return nil, err
+  end
+
+  client:close()
+
+  -- since redis set is happening on a timer, results might be flaky without
+  -- sleeping
+  ngx.sleep(0.010)
+
+  return res, body
+end
+
+local function GET(url, opts, res_status)
+  return request("GET", url, opts, res_status)
+end
 
 for _, strategy in helpers.each_strategy() do
   describe(PLUGIN_NAME .. ": (access) [#" .. strategy .. "]", function()
     local client = helpers.proxy_client
+    local red = redis.connection()
 
     local route_configs = {
       default = {
@@ -84,7 +121,7 @@ for _, strategy in helpers.each_strategy() do
     lazy_setup(function()
       local bp, routes
 
-      flush_redis()
+      redis.flush()
 
       if KONG_VERSION >= version("0.15.0") then
         --
@@ -127,70 +164,62 @@ for _, strategy in helpers.each_strategy() do
     end)
 
     after_each(function()
-      flush_redis()
+      redis.flush()
     end)
 
     describe("request", function()
       describe("methods", function()
         it("handles GET", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
+          local r = GET("/request", {
             headers = { host = DEFAULT_ROUTE_HOST }
-          })
+          }, 200)
           test_is_miss(r)
-          -- assert some sort of mock that a cache entry has been added
+          assert.are.equal(#redis.keys(red), 1)
         end)
 
         it("does not handle PUT", function()
-          local r = assert(client():send {
-            method = "PUT",
-            path = "/request",
+          local r = request("PUT", "/request", {
             headers = { host = DEFAULT_ROUTE_HOST }
-          })
+          }, 200)
           test_is_bypass(r)
-          -- assert that no cache entry has been added
+          assert.are.equal(#redis.keys(red), 0)
         end)
       end)
 
       describe("with vary_query_params as default", function()
         before_each(function()
-          assert(client():send {
-            method = "GET",
-            path = "/request",
+          GET("/request", {
             headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "foo", params = "bar" },
-          })
+          }, 200)
+          assert.are.equal(#redis.keys(red), 1)
         end)
 
         it("caches all query params", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
+          local r = GET("/request", {
             headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "foo", params = "bar" },
-          })
+          }, 200)
           test_is_hit(r)
+          assert.are.equal(#redis.keys(red), 1)
         end)
 
         it("a subset of the query params produce a new entry", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
-            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
+          local r = GET("/request", {
+            headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "foo" },
-          })
+          }, 200)
           test_is_miss(r)
+          assert.are.equal(#redis.keys(red), 2)
         end)
 
         it("querystring values affect cache key generation", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
-            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
+          local r = GET("/request", {
+            headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "bar", params = "foo" },
-          })
+          }, 200)
           test_is_miss(r)
+          assert.are.equal(#redis.keys(red), 2)
         end)
       end)
 
@@ -215,27 +244,26 @@ for _, strategy in helpers.each_strategy() do
         end)
 
         it("a subset of params generate a different signature", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
+          local r = GET("/request", {
             headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "foo" },
-          })
+          }, 200)
           test_is_miss(r)
+          assert.are.equal(#redis.keys(red), 2)
         end)
       end)
 
       describe("cache_ttl", function()
         it("expires cache keys in specified cache_ttl", function()
-          local r = assert(client():send {
-            method = "GET",
-            path = "/request",
+          local r = GET("/request", {
             headers = { host = CACHE_LOW_TTL_ROUTE_HOST },
-          })
+          }, 200)
           test_is_miss(r)
 
+          assert.are.equal(#redis.keys(red), 1)
           -- Hey, we just made the tests cache_ttl (s) slower!
           ngx.sleep(route_configs.low_ttl.config.cache_ttl)
+          assert.are.equal(#redis.keys(red), 0)
 
           local r2 = assert(client():send {
             method = "GET",
