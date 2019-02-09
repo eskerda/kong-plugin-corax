@@ -7,28 +7,52 @@ local KONG_VERSION = version(select(3, assert(helpers.kong_exec("version"))))
 
 local DEFAULT_ROUTE_HOST           = "test1.com"
 local VARY_QUERY_PARAMS_ROUTE_HOST = "test2.com"
+local CACHE_LOW_TTL_ROUTE_HOST     = "test3.com"
+
+
+local function cache_is_status(res, status)
+  local header_value = assert.response(res).has.header("X-Cache-Status")
+  assert.equal(status, header_value)
+end
+
+local function test_is_hit(res)
+  cache_is_status(res, "Hit")
+end
+
+local function test_is_miss(res)
+  cache_is_status(res, "Miss")
+end
+
+local function test_is_bypass(res)
+  cache_is_status(res, "Bypass")
+end
 
 
 for _, strategy in helpers.each_strategy() do
   describe(PLUGIN_NAME .. ": (access) [#" .. strategy .. "]", function()
-    local client
+    local client = helpers.proxy_client
     local red = redis:new()
+    local route_configs = {
+      default = {
+        host = DEFAULT_ROUTE_HOST,
+        config = {},
+      },
+      vary_query = {
+        host = VARY_QUERY_PARAMS_ROUTE_HOST,
+        config = {
+          vary_query_params = {"some", "params"},
+        }
+      },
+      low_ttl = {
+        host = CACHE_LOW_TTL_ROUTE_HOST,
+        config = {
+          cache_ttl = 1,
+        }
+      },
+    }
 
     lazy_setup(function()
       local bp, routes
-
-      local route_configs = {
-        default = {
-          host = DEFAULT_ROUTE_HOST,
-          config = {},
-        },
-        vary_query = {
-          host = VARY_QUERY_PARAMS_ROUTE_HOST,
-          config = {
-            vary_query_params = {"some", "params"},
-          }
-        }
-      }
 
       if KONG_VERSION >= version("0.15.0") then
         --
@@ -71,134 +95,127 @@ for _, strategy in helpers.each_strategy() do
     end)
 
     before_each(function()
-      client = helpers.proxy_client()
       local ok, err = red:connect('localhost', '6379')
       assert(ok, err)
     end)
 
     after_each(function()
-      if client then client:close() end
       red:flushall()
     end)
 
     describe("request", function()
       describe("methods", function()
         it("handles GET", function()
-          local r = assert(client:send {
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = DEFAULT_ROUTE_HOST
-            }
+            headers = { host = DEFAULT_ROUTE_HOST }
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.is.equal("Miss", header_value)
+          test_is_miss(r)
           -- assert some sort of mock that a cache entry has been added
         end)
 
         it("does not handle PUT", function()
-          local r = assert(client:send {
+          local r = assert(client():send {
             method = "PUT",
             path = "/request",
-            headers = {
-              host = DEFAULT_ROUTE_HOST
-            }
+            headers = { host = DEFAULT_ROUTE_HOST }
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Bypass", header_value)
+          test_is_bypass(r)
           -- assert that no cache entry has been added
         end)
       end)
 
-      describe("query_params_default", function()
+      describe("with vary_query_params as default", function()
         before_each(function()
-          assert(helpers.proxy_client():send {
+          assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = DEFAULT_ROUTE_HOST,
-            },
+            headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "foo", params = "bar" },
           })
         end)
 
-        it("caches all query params for keys when not configured", function()
-          local r = assert(helpers.proxy_client():send {
+        it("caches all query params", function()
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = DEFAULT_ROUTE_HOST,
-            },
+            headers = { host = DEFAULT_ROUTE_HOST },
             query = { some = "foo", params = "bar" },
           })
-
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Hit", header_value)
+          test_is_hit(r)
         end)
 
-        it("does not cache a subset of query params", function()
-          local r = assert(client:send {
+        it("a subset of the query params produce a new entry", function()
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = VARY_QUERY_PARAMS_ROUTE_HOST
-            },
+            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "foo" },
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Miss", header_value)
+          test_is_miss(r)
         end)
 
-        it("caches different querystring values separately", function()
-          local r = assert(client:send {
+        it("querystring values affect cache key generation", function()
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = VARY_QUERY_PARAMS_ROUTE_HOST
-            },
+            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "bar", params = "foo" },
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Miss", header_value)
+          test_is_miss(r)
         end)
       end)
 
-      describe("vary_query_params", function()
+      describe("with defined vary_query_params and a new entry", function()
         before_each(function()
-          assert(helpers.proxy_client():send {
+          assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = VARY_QUERY_PARAMS_ROUTE_HOST
-            },
+            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "foo", params = "bar" },
           })
         end)
 
-        it("caches a superset of vary query params", function()
-          local r = assert(client:send {
+        it("a superset of params generate the same signature", function()
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = VARY_QUERY_PARAMS_ROUTE_HOST
-            },
+            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "foo", params = "bar", awesome = "baz"},
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Hit", header_value)
+          test_is_hit(r)
         end)
 
-        it("does not cache a subset of vary query params", function()
-          local r = assert(client:send {
+        it("a subset of params generate a different signature", function()
+          local r = assert(client():send {
             method = "GET",
             path = "/request",
-            headers = {
-              host = VARY_QUERY_PARAMS_ROUTE_HOST
-            },
+            headers = { host = VARY_QUERY_PARAMS_ROUTE_HOST },
             query = { some = "foo" },
           })
-          local header_value = assert.response(r).has.header("X-Cache-Status")
-          assert.equal("Miss", header_value)
+          test_is_miss(r)
+        end)
+      end)
+
+      describe("cache_ttl", function()
+        it("expires cache keys in specified cache_ttl", function()
+          local r = assert(client():send {
+            method = "GET",
+            path = "/request",
+            headers = { host = CACHE_LOW_TTL_ROUTE_HOST },
+          })
+          test_is_miss(r)
+
+          -- Hey, we just made the tests cache_ttl (s) slower!
+          ngx.sleep(route_configs.low_ttl.config.cache_ttl)
+
+          local r2 = assert(client():send {
+            method = "GET",
+            path = "/request",
+            headers = { host = CACHE_LOW_TTL_ROUTE_HOST },
+          })
+          test_is_miss(r2)
         end)
       end)
 

@@ -67,6 +67,7 @@ function redis_async_set(conf, key, data)
   ngx.timer.at(0, function(premature)
     red = redis_connection(conf)
     red:set(key, data)
+    red:expire(key, conf.cache_ttl)
   end)
 end
 
