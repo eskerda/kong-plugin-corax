@@ -28,20 +28,26 @@ function plugin:rewrite(conf)
 end
 
 function generate_key(conf)
-  -- Do we really need an md5 here?
-  -- Cons: Breaks locality
-  -- Pros: Makes key length deterministic
-  local path = kong.request.get_path()
-  local host = kong.request.get_host()
-  local port = kong.request.get_port()
-  local query = kong.request.get_query()
-  local method = kong.request.get_method()
+  local path    = kong.request.get_path()
+  local host    = kong.request.get_host()
+  local port    = kong.request.get_port()
+  local query   = kong.request.get_query()
+  local method  = kong.request.get_method()
+  local headers = kong.request.get_headers()
 
   if conf.vary_query_params then
     query = tx.intersection(query, tx.makeset(conf.vary_query_params or {}))
   end
 
-  key = host .. port .. method .. path .. utils.encode_args(query)
+  headers = tx.intersection(headers, tx.makeset(conf.vary_headers or {}))
+  headers = tx.pairmap(function(k, v) return k .. ":" .. v end, headers)
+  headers = table.concat(headers, ",")
+
+  local key_elements = {
+    host, port, method, path, utils.encode_args(query), headers,
+  }
+
+  key = table.concat(key_elements)
   return ngx.md5(key)
 end
 
