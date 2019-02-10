@@ -97,7 +97,7 @@ function store.key(conf, request)
   -- Not sure how novel or stupid this idea is. To avoid collision between
   -- key elements, make an md5 of them. ¯\_(ツ)_/¯
   local sha256 = resty_sha256:new()
-  local ok = tx.reduce(function (memo, elem)
+  tx.reduce(function (memo, elem)
     return memo and sha256:update(ngx.md5(tostring(elem)))
   end, key_elements)
   local hex_digest = str.to_hex(sha256:final())

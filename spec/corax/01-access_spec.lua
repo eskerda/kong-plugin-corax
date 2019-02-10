@@ -263,7 +263,7 @@ for _, strategy in helpers.each_strategy() do
 
       describe("headers", function()
         it("by default does not take headers into account", function()
-          local r = GET("/request", {
+          GET("/request", {
             headers = {
               host = DEFAULT_ROUTE_HOST,
               some = "headers",
