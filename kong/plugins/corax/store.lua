@@ -2,6 +2,8 @@ local tx = require "pl/tablex"
 local cjson = require "cjson"
 local redis = require "resty.redis"
 local utils = require "kong.tools.utils"
+local str = require "resty.string"
+local resty_sha256 = require "resty.sha256"
 
 local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
 
@@ -83,23 +85,31 @@ function store.key(conf, request)
     query = tx.intersection(query, tx.makeset(conf.vary_query_params or {}))
   end
 
-  headers = tx.intersection(headers, tx.makeset(conf.vary_headers or {}))
-  headers = tx.pairmap(function(k, v) return k .. ":" .. v end, headers)
-  headers = table.concat(headers, ",")
-
   local key_elements = {
-    host, port, method, path, utils.encode_args(query), headers,
+    host, port, method, path, utils.encode_args(query)
   }
 
-  return prefix .. "-" .. ngx.md5(table.concat(key_elements))
+  headers = tx.intersection(headers, tx.makeset(conf.vary_headers or {}))
+  headers = tx.pairmap(function(k, v) return k .. ":" .. v end, headers)
+
+  key_elements = tx.insertvalues(key_elements, headers)
+
+  -- Not sure how novel or stupid this idea is. To avoid collision between
+  -- key elements, make an md5 of them. ¯\_(ツ)_/¯
+  local sha256 = resty_sha256:new()
+  local ok = tx.reduce(function (memo, elem)
+    return memo and sha256:update(ngx.md5(tostring(elem)))
+  end, key_elements)
+  local hex_digest = str.to_hex(sha256:final())
+
+  return prefix .. "-" .. hex_digest
 end
 
 function store.set(conf, key, response)
   redis.set(conf, key, cjson.encode(response))
 end
 
-function store.get(conf, request)
-  local key = store.key(conf, request)
+function store.get(conf, key)
   local hit = redis.get(conf, key)
   if not hit or hit == ngx.null then return false end
   return cjson.decode(hit)
