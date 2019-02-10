@@ -405,5 +405,22 @@ for _, strategy in helpers.each_strategy() do
         end)
       end)
     end)
+
+    describe("happy_path #happy", function()
+      it("access a page two times and both get the same response", function()
+        local r, body = GET("/request", {
+          headers = { host = DEFAULT_ROUTE_HOST }
+        }, 200)
+        test_is_miss(r)
+        assert.are.equal(#redis.keys(red), 1)
+        local r2, body2 = GET("/request", {
+          headers = { host = DEFAULT_ROUTE_HOST }
+        }, 200)
+        test_is_hit(r2)
+        assert.are.equal(#redis.keys(red), 1)
+        assert.are.equal(body, body2)
+      end)
+    end)
+
   end)
 end
