@@ -38,7 +38,7 @@ end
 
 function plugin:header_filter(conf)
   plugin.super.header_filter(self)
-  if filters.by_response_headers(conf, kong.response) then
+  if filters.by_response(conf, kong.response) then
     kong.response.set_header("x-cache-status", "Bypass")
     ngx.ctx.cache_bypass = true
     return

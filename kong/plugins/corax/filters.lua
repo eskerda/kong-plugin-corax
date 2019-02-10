@@ -13,7 +13,7 @@ function filters.by_request(conf, request)
   return false
 end
 
-function filters.by_response_headers(conf, response)
+function filters.by_response(conf, response)
   local rules = {
     function ()
       local status = response.get_status()

@@ -9,6 +9,16 @@ local request = function(path, host, port, query, method, headers)
   }
 end
 
+local response = function(status, headers)
+  return {
+    get_header = function(key)
+      return headers[key]
+    end,
+    get_status = function() return status end,
+  }
+end
+
 return {
-  request = request
+  request = request,
+  response = response
 }
