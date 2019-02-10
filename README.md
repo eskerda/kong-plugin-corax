@@ -1,3 +1,5 @@
+# Corax [![Build Status](https://travis-ci.org/eskerda/kong-plugin-corax.svg?branch=master)](https://travis-ci.org/eskerda/kong-plugin-corax)
+
 ```
 redis response caching for the masses
                                                  ,::::.._
