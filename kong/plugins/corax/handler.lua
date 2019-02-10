@@ -14,13 +14,14 @@ end
 function plugin:access(conf)
   plugin.super.access(self)
 
-  if filters.by_request(conf) then
+  if filters.by_request(conf, kong.request) then
     kong.response.set_header("x-cache-status", "Bypass")
     ngx.ctx.cache_bypass = true
     return
   end
 
-  local response = store.get(conf, kong.request)
+  local key = store.key(conf, kong.request)
+  local response = store.get(conf, key)
   if not response then
     kong.response.set_header("x-cache-status", "Miss")
     ngx.ctx.cache_bypass = false
@@ -37,7 +38,7 @@ end
 
 function plugin:header_filter(conf)
   plugin.super.header_filter(self)
-  if filters.by_response_headers(conf) then
+  if filters.by_response_headers(conf, kong.response) then
     kong.response.set_header("x-cache-status", "Bypass")
     ngx.ctx.cache_bypass = true
     return
