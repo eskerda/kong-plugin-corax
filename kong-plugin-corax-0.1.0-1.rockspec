@@ -24,6 +24,7 @@ build = {
     ["kong.plugins.corax.handler"] = "kong/plugins/corax/handler.lua",
     ["kong.plugins.corax.schema"] = "kong/plugins/corax/schema.lua",
     ["kong.plugins.corax.store"] = "kong/plugins/corax/store.lua",
+    ["kong.plugins.corax.redis"] = "kong/plugins/corax/redis.lua",
     ["kong.plugins.corax.filters"] = "kong/plugins/corax/filters.lua",
   }
 }
