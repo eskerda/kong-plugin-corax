@@ -1,4 +1,5 @@
 local helpers = require "spec.helpers"
+local redis = require "resty.redis"
 
 local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
 
@@ -8,7 +9,6 @@ local REDIS_PASSWORD = ""
 local REDIS_DATABASE = 0
 
 local function redis_connection()
-  local redis = require "resty.redis"
   local red = redis:new()
   red:set_timeout(2000)
   local ok, err = red:connect(REDIS_HOST, REDIS_PORT)
@@ -30,7 +30,7 @@ local function redis_connection()
   return red
 end
 
-local redis = {
+return {
   REDIS_HOST = REDIS_HOST,
   REDIS_PORT = REDIS_PORT,
   REDIS_PASSWORD = REDIS_PASSWORD,
@@ -46,5 +46,3 @@ local redis = {
     return red:keys(query)
   end,
 }
-
-return redis

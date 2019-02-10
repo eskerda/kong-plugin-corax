@@ -23,6 +23,7 @@ addons:
 
 env:
   global:
+    - KONG_VERSION=1.0.3
     - LUAROCKS=3.0.4
     - OPENSSL=1.1.1a
     - OPENRESTY_BASE=1.13.6.2
@@ -33,6 +34,7 @@ env:
     - DOWNLOAD_CACHE=$HOME/download-cache
     - INSTALL_CACHE=$HOME/install-cache
 
+    - KONG_TEST_DATABASE=cassandra
     - KONG_TEST_PG_DATABASE=travis
     - KONG_TEST_PG_USER=postgres
     - KONG_TEST_CASSANDRA_KEYSPACE=kong_tests
@@ -42,16 +44,14 @@ env:
     - KONG_PLUGINS=bundled,$PLUGIN_NAME
 
 before_install:
-  - git clone https://github.com/Kong/kong.git kong-ce
-  - source kong-ce/.ci/setup_env.sh
+  - source .ci/setup_env.sh
 
 install:
-  - luarocks make
-  - export LUA_PATH="`pwd`/?.lua;`pwd`/?/init.lua;$LUA_PATH"
-  - cd kong-ce && make dev
+  - export PLUGIN_PATH=`pwd`
+  - source .ci/install.sh
 
 script:
-  - bin/busted -o gtest -v --exclude-tags=cassandra ../spec
+  - cd $KONG_PATH && bin/busted -o gtest -v $PLUGIN_PATH/spec
 
 cache:
   apt: true
