@@ -1,4 +1,7 @@
-local helpers = require "spec.helpers"
+-- All hell brokes loose on redis connect if we do not include this module
+-- some dnscache not being initialized soon enough
+require "spec.helpers"
+
 local redis = require "resty.redis"
 
 local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
