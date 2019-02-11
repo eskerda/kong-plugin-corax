@@ -50,8 +50,20 @@ install:
   - export PLUGIN_PATH=`pwd`
   - source .ci/install.sh
 
-script:
-  - cd $KONG_PATH && bin/busted -o gtest -v $PLUGIN_PATH/spec
+stages:
+  - lint
+  - test
+
+jobs:
+  include:
+    - stage: lint
+      script:
+        - cd $PLUGIN_PATH
+        - luacheck -q .
+    - stage: test
+      script:
+        - cd $KONG_PATH
+        - bin/busted -o gtest -v $PLUGIN_PATH/spec
 
 cache:
   apt: true
