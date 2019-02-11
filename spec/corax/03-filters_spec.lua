@@ -30,7 +30,7 @@ describe(PLUGIN_NAME .. ": (filters) ", function()
 
   describe("response header filters", function()
     local headers = {
-      ["content-type"] = "application/json",
+      ["content-type"] = "application/json; charset=utf-8",
       ["foo"] = "bar"
     }
     it("filters by status code", function()

@@ -21,6 +21,7 @@ function filters.by_response(conf, response)
     end,
     function ()
       local content_type = response.get_header("content-type")
+      content_type = string.gsub(content_type, ";.*", "")
       return not utils.table_contains(conf.content_type, content_type)
     end,
   }
