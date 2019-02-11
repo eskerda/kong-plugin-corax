@@ -58,12 +58,13 @@ describe(PLUGIN_NAME .. ": (store) ", function()
       for _, case in pairs(cases) do
         conf = {
           route_id = "X0X0",
+          service_id = "1010",
           vary_headers = case.vary_headers,
           vary_query_params = case.vary_query_params,
         }
         mock_req = mock_request(unpack(case.req))
         key = store.key(conf, mock_req)
-        prefix = PLUGIN_NAME .. "-" .. conf.route_id
+        prefix = store.prefix(conf)
         assert.is_equal(key, prefix .. "-" .. case.expected_uid)
       end
     end)

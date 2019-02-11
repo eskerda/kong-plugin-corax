@@ -9,8 +9,16 @@ local PLUGIN_NAME = require("kong.plugins.corax").PLUGIN_NAME
 
 local store = {}
 
+local EMPTY_UUID = "00000000-0000-0000-0000-000000000000"
+
+function store.prefix(conf)
+  local route_id   = conf.route_id or EMPTY_UUID
+  local service_id = conf.service_id or EMPTY_UUID
+  return PLUGIN_NAME .. "-" .. route_id .. "-" .. service_id
+end
+
 function store.key(conf, request)
-  local prefix   = PLUGIN_NAME .. "-" .. conf.route_id
+  local prefix   = store.prefix(conf)
   local path     = request.get_path()
   local host     = request.get_host()
   local port     = request.get_port()
