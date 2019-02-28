@@ -1,0 +1,28 @@
+kind: pipeline
+name: default
+
+steps:
+- name: lint
+  image: corax
+  pull: if-not-exists
+  commands:
+    - cd $PLUGIN_PATH
+    - luacheck -q .
+
+- name: test
+  image: corax
+  pull: if-not-exists
+  environment:
+    KONG_PG_HOST: database
+  commands:
+    - cd $KONG_PATH
+    - bin/busted $KONG_PLUGIN_PATH/spec
+
+services:
+  - name: database
+    image: postgres:9.5-alpine
+    ports:
+      - 5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: travis
